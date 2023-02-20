@@ -640,6 +640,7 @@ func New(ctx context.Context) (*schema.Provider, error) {
 			"aws_elasticache_user":              elasticache.DataSourceUser(),
 
 			"aws_elastic_beanstalk_application":    elasticbeanstalk.DataSourceApplication(),
+			"aws_elastic_beanstalk_environment":    elasticbeanstalk.DataSourceEnvironment(),
 			"aws_elastic_beanstalk_hosted_zone":    elasticbeanstalk.DataSourceHostedZone(),
 			"aws_elastic_beanstalk_solution_stack": elasticbeanstalk.DataSourceSolutionStack(),
 
