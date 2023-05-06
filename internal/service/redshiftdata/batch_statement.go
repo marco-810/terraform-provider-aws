@@ -119,7 +119,7 @@ func resourceBatchStatementCreate(ctx context.Context, d *schema.ResourceData, m
 
 	d.SetId(aws.StringValue(output.Id))
 
-	if _, err := waitStatementFinished(ctx, conn, d.Id(), d.Timeout(schema.TimeoutCreate)); err != nil {
+	if err := waitStatementFinished(ctx, conn, d.Id(), d.Timeout(schema.TimeoutCreate)); err != nil {
 		return sdkdiag.AppendErrorf(diags, "waiting for Redshift Data Statement (%s) to finish: %s", d.Id(), err)
 	}
 
