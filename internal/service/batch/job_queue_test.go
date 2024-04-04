@@ -453,6 +453,103 @@ func TestAccBatchJobQueue_tags(t *testing.T) {
 	})
 }
 
+func TestAccBatchJobQueue_JobStateTimeLimitActionsMultiple(t *testing.T) {
+	ctx := acctest.Context(t)
+	var jobQueue1 batch.JobQueueDetail
+	resourceName := "aws_batch_job_queue.test"
+	rName := sdkacctest.RandomWithPrefix(acctest.ResourcePrefix)
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(ctx, t); testAccPreCheck(ctx, t) },
+		ErrorCheck:               acctest.ErrorCheck(t, names.BatchServiceID),
+		ProtoV5ProviderFactories: acctest.ProtoV5ProviderFactories,
+		CheckDestroy:             testAccCheckJobQueueDestroy(ctx),
+		Steps: []resource.TestStep{
+			{
+				Config: acctest.ConfigCompose(
+					testAccJobQueueConfig_Base(rName),
+					fmt.Sprintf(`
+resource "aws_batch_job_queue" "test" {
+  compute_environments = [aws_batch_compute_environment.test.arn]
+  name                 = %[1]q
+  priority             = 1
+  state                = "DISABLED"
+
+  job_state_time_limit_action {
+    action           = "CANCEL"
+    max_time_seconds = 600
+    reason           = "MISCONFIGURATION:JOB_RESOURCE_REQUIREMENT"
+    state            = "RUNNABLE"
+  }
+
+  job_state_time_limit_action {
+    action           = "CANCEL"
+    max_time_seconds = 605
+    reason           = "CAPACITY:INSUFFICIENT_INSTANCE_CAPACITY"
+    state            = "RUNNABLE"
+  }
+}
+`, rName)),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckJobQueueExists(ctx, resourceName, &jobQueue1),
+					resource.TestCheckResourceAttr(resourceName, "job_state_time_limit_action.#", "2"),
+					resource.TestCheckResourceAttrPair(resourceName, "job_state_time_limit_action.0", "job_state_time_limit_action.action", "CANCEL"),
+					resource.TestCheckResourceAttrPair(resourceName, "job_state_time_limit_action.0", "job_state_time_limit_action.max_time_seconds", "600"),
+					resource.TestCheckResourceAttrPair(resourceName, "job_state_time_limit_action.0", "job_state_time_limit_action.reason", "MISCONFIGURATION:JOB_RESOURCE_REQUIREMENT"),
+					resource.TestCheckResourceAttrPair(resourceName, "job_state_time_limit_action.0", "job_state_time_limit_action.state", "RUNNABLE"),
+					resource.TestCheckResourceAttrPair(resourceName, "job_state_time_limit_action.1", "job_state_time_limit_action.action", "CANCEL"),
+					resource.TestCheckResourceAttrPair(resourceName, "job_state_time_limit_action.1", "job_state_time_limit_action.max_time_seconds", "605"),
+					resource.TestCheckResourceAttrPair(resourceName, "job_state_time_limit_action.1", "job_state_time_limit_action.reason", "CAPACITY:INSUFFICIENT_INSTANCE_CAPACITY"),
+					resource.TestCheckResourceAttrPair(resourceName, "job_state_time_limit_action.1", "job_state_time_limit_action.state", "RUNNABLE"),
+				),
+			},
+			{
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+			{
+				Config: acctest.ConfigCompose(
+					testAccJobQueueConfig_Base(rName),
+					fmt.Sprintf(`
+resource "aws_batch_job_queue" "test" {
+  compute_environments = [aws_batch_compute_environment.test.arn]
+  name                 = %[1]q
+  priority             = 1
+  state                = "DISABLED"
+
+  job_state_time_limit_action {
+    action           = "CANCEL"
+    max_time_seconds = 610
+    reason           = "MISCONFIGURATION:JOB_RESOURCE_REQUIREMENT"
+    state            = "RUNNABLE"
+  }
+
+  job_state_time_limit_action {
+    action           = "CANCEL"
+    max_time_seconds = 605
+    reason           = "MISCONFIGURATION:COMPUTE_ENVIRONMENT_MAX_RESOURCE"
+    state            = "RUNNABLE"
+  }
+}
+`, rName)),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckJobQueueExists(ctx, resourceName, &jobQueue1),
+					resource.TestCheckResourceAttr(resourceName, "job_state_time_limit_action.#", "2"),
+					resource.TestCheckResourceAttrPair(resourceName, "job_state_time_limit_action.0", "job_state_time_limit_action.action", "CANCEL"),
+					resource.TestCheckResourceAttrPair(resourceName, "job_state_time_limit_action.0", "job_state_time_limit_action.max_time_seconds", "610"),
+					resource.TestCheckResourceAttrPair(resourceName, "job_state_time_limit_action.0", "job_state_time_limit_action.reason", "MISCONFIGURATION:JOB_RESOURCE_REQUIREMENT"),
+					resource.TestCheckResourceAttrPair(resourceName, "job_state_time_limit_action.0", "job_state_time_limit_action.state", "RUNNABLE"),
+					resource.TestCheckResourceAttrPair(resourceName, "job_state_time_limit_action.1", "job_state_time_limit_action.action", "CANCEL"),
+					resource.TestCheckResourceAttrPair(resourceName, "job_state_time_limit_action.1", "job_state_time_limit_action.max_time_seconds", "605"),
+					resource.TestCheckResourceAttrPair(resourceName, "job_state_time_limit_action.1", "job_state_time_limit_action.reason", "MISCONFIGURATION:COMPUTE_ENVIRONMENT_MAX_RESOURCE"),
+					resource.TestCheckResourceAttrPair(resourceName, "job_state_time_limit_action.1", "job_state_time_limit_action.state", "RUNNABLE"),
+				),
+			},
+		},
+	})
+}
+
 func testAccCheckJobQueueExists(ctx context.Context, n string, jq *batch.JobQueueDetail) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		rs, ok := s.RootModule().Resources[n]
@@ -533,7 +630,7 @@ func testAccCheckJobQueueComputeEnvironmentOrderUpdate(ctx context.Context, jobQ
 	}
 }
 
-func testAccJobQueueConfigBase(rName string) string {
+func testAccJobQueueConfig_Base(rName string) string {
 	return fmt.Sprintf(`
 data "aws_partition" "current" {}
 
@@ -633,7 +730,7 @@ resource "aws_batch_compute_environment" "test" {
 
 func testAccJobQueueConfig_priority(rName string, priority int) string {
 	return acctest.ConfigCompose(
-		testAccJobQueueConfigBase(rName),
+		testAccJobQueueConfig_Base(rName),
 		fmt.Sprintf(`
 resource "aws_batch_job_queue" "test" {
   compute_environments = [aws_batch_compute_environment.test.arn]
@@ -678,7 +775,7 @@ resource "aws_batch_scheduling_policy" "test2" {
 
 func testAccJobQueueConfig_schedulingPolicy(rName string, schedulingPolicyName1 string, schedulingPolicyName2 string, selectSchedulingPolicy string) string {
 	return acctest.ConfigCompose(
-		testAccJobQueueConfigBase(rName),
+		testAccJobQueueConfig_Base(rName),
 		testAccJobQueueSchedulingPolicy(schedulingPolicyName1, schedulingPolicyName2),
 		fmt.Sprintf(`
 locals {
@@ -697,7 +794,7 @@ resource "aws_batch_job_queue" "test" {
 
 func testAccJobQueueConfig_state(rName string, state string) string {
 	return acctest.ConfigCompose(
-		testAccJobQueueConfigBase(rName),
+		testAccJobQueueConfig_Base(rName),
 		fmt.Sprintf(`
 resource "aws_batch_job_queue" "test" {
   compute_environments = [aws_batch_compute_environment.test.arn]
@@ -711,7 +808,7 @@ resource "aws_batch_job_queue" "test" {
 
 func testAccJobQueueConfig_stateCEO(rName string, state string) string {
 	return acctest.ConfigCompose(
-		testAccJobQueueConfigBase(rName),
+		testAccJobQueueConfig_Base(rName),
 		fmt.Sprintf(`
 resource "aws_batch_job_queue" "test" {
   compute_environment_order {
@@ -728,7 +825,7 @@ resource "aws_batch_job_queue" "test" {
 
 func testAccJobQueueConfig_ComputeEnvironments_multiple(rName string, state string) string {
 	return acctest.ConfigCompose(
-		testAccJobQueueConfigBase(rName),
+		testAccJobQueueConfig_Base(rName),
 		fmt.Sprintf(`
 resource "aws_batch_job_queue" "test" {
   compute_environments = concat(
@@ -764,7 +861,7 @@ resource "aws_batch_compute_environment" "more" {
 
 func testAccJobQueueConfig_ComputeEnvironmentOrder_multiple(rName string, state string, o1 int, o2 int, o3 int) string {
 	return acctest.ConfigCompose(
-		testAccJobQueueConfigBase(rName),
+		testAccJobQueueConfig_Base(rName),
 		fmt.Sprintf(`
 resource "aws_batch_job_queue" "test" {
   compute_environment_order {
@@ -811,7 +908,7 @@ resource "aws_batch_compute_environment" "more" {
 
 func testAccJobQueueConfig_ComputeEnvironments_multipleReorder(rName string, state string) string {
 	return acctest.ConfigCompose(
-		testAccJobQueueConfigBase(rName),
+		testAccJobQueueConfig_Base(rName),
 		fmt.Sprintf(`
 resource "aws_batch_job_queue" "test" {
   compute_environments = [
@@ -848,7 +945,7 @@ resource "aws_batch_compute_environment" "more" {
 
 func testAccJobQueueConfig_tags1(rName, tagKey1, tagValue1 string) string {
 	return acctest.ConfigCompose(
-		testAccJobQueueConfigBase(rName),
+		testAccJobQueueConfig_Base(rName),
 		fmt.Sprintf(`
 resource "aws_batch_job_queue" "test" {
   compute_environments = [aws_batch_compute_environment.test.arn]
@@ -865,7 +962,7 @@ resource "aws_batch_job_queue" "test" {
 
 func testAccJobQueueConfig_tags2(rName, tagKey1, tagValue1, tagKey2, tagValue2 string) string {
 	return acctest.ConfigCompose(
-		testAccJobQueueConfigBase(rName),
+		testAccJobQueueConfig_Base(rName),
 		fmt.Sprintf(`
 resource "aws_batch_job_queue" "test" {
   compute_environments = [aws_batch_compute_environment.test.arn]
