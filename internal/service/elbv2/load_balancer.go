@@ -101,6 +101,12 @@ func ResourceLoadBalancer() *schema.Resource {
 				Type:     schema.TypeString,
 				Computed: true,
 			},
+			"client_keep_alive": {
+				Type:             schema.TypeInt,
+				Optional:         true,
+				Default:          3600,
+				DiffSuppressFunc: suppressIfLBTypeNot(elbv2.LoadBalancerTypeEnumApplication),
+			},
 			"connection_logs": {
 				Type:             schema.TypeList,
 				Optional:         true,
@@ -435,6 +441,13 @@ func resourceLoadBalancerCreate(ctx context.Context, d *schema.ResourceData, met
 				Value: flex.BoolValueToString(false),
 			})
 		}
+
+		if v, ok := d.GetOk("client_keep_alive"); ok {
+			attributes = append(attributes, &elbv2.LoadBalancerAttribute{
+				Key:   aws.String(loadBalancerAttributeClientKeepAliveSeconds),
+				Value: flex.IntValueToString(v.(int)),
+			})
+		}
 	}
 
 	attributes = append(attributes, loadBalancerAttributes.expand(d, false)...)
@@ -702,6 +715,11 @@ type loadBalancerAttributeInfo struct {
 type loadBalancerAttributeMap map[string]loadBalancerAttributeInfo
 
 var loadBalancerAttributes = loadBalancerAttributeMap(map[string]loadBalancerAttributeInfo{
+	"client_keep_alive": {
+		apiAttributeKey:            loadBalancerAttributeClientKeepAliveSeconds,
+		tfType:                     schema.TypeInt,
+		loadBalancerTypesSupported: []string{elbv2.LoadBalancerTypeEnumApplication},
+	},
 	"desync_mitigation_mode": {
 		apiAttributeKey:            loadBalancerAttributeRoutingHTTPDesyncMitigationMode,
 		tfType:                     schema.TypeString,
