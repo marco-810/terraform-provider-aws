@@ -9,4 +9,7 @@ import (
 
 const (
 	propagationTimeout = 2 * time.Minute
+
+	ResourceNotFoundException      = "ResourceNotFoundException"
+	InvalidParameterValueException = "InvalidParameterValueException"
 )

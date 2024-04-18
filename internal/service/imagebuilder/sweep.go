@@ -7,12 +7,13 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/imagebuilder"
-	"github.com/hashicorp/go-multierror"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/imagebuilder"
+	"github.com/aws/aws-sdk-go-v2/service/imagebuilder/types"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-provider-aws/internal/sweep"
-	"github.com/hashicorp/terraform-provider-aws/internal/sweep/awsv1"
+	"github.com/hashicorp/terraform-provider-aws/internal/sweep/awsv2"
+	"github.com/hashicorp/terraform-provider-aws/internal/sweep/framework"
 )
 
 func RegisterSweepers() {
@@ -50,6 +51,11 @@ func RegisterSweepers() {
 		Name: "aws_imagebuilder_infrastructure_configuration",
 		F:    sweepInfrastructureConfigurations,
 	})
+
+	resource.AddTestSweepers("aws_imagebuilder_lifecycle_policy", &resource.Sweeper{
+		Name: "aws_imagebuilder_lifecycle_policy",
+		F:    sweepLifecyclePolicies,
+	})
 }
 
 func sweepComponents(region string) error {
@@ -58,75 +64,43 @@ func sweepComponents(region string) error {
 	if err != nil {
 		return fmt.Errorf("error getting client: %s", err)
 	}
-	conn := client.ImageBuilderConn(ctx)
-
-	sweepResources := make([]sweep.Sweepable, 0)
-	var sweeperErrs *multierror.Error
+	conn := client.ImageBuilderClient(ctx)
 
 	input := &imagebuilder.ListComponentsInput{
-		Owner: aws.String(imagebuilder.OwnershipSelf),
+		Owner: types.OwnershipSelf,
 	}
-	err = conn.ListComponentsPagesWithContext(ctx, input, func(page *imagebuilder.ListComponentsOutput, lastPage bool) bool {
-		if page == nil {
-			return !lastPage
+
+	sweepResources := make([]sweep.Sweepable, 0)
+
+	pages := imagebuilder.NewListComponentsPaginator(conn, input)
+	for pages.HasMorePages() {
+		page, err := pages.NextPage(ctx)
+
+		if awsv2.SkipSweepError(err) {
+			log.Printf("[WARN] Skipping ImageBuilder Components sweep for %s: %s", region, err)
+			return nil
 		}
 
-		for _, componentVersion := range page.ComponentVersionList {
-			if componentVersion == nil {
-				continue
-			}
-
-			arn := aws.StringValue(componentVersion.Arn)
-			input := &imagebuilder.ListComponentBuildVersionsInput{
-				ComponentVersionArn: componentVersion.Arn,
-			}
-
-			err := conn.ListComponentBuildVersionsPagesWithContext(ctx, input, func(page *imagebuilder.ListComponentBuildVersionsOutput, lastPage bool) bool {
-				if page == nil {
-					return !lastPage
-				}
-
-				for _, componentSummary := range page.ComponentSummaryList {
-					if componentSummary == nil {
-						continue
-					}
-
-					arn := aws.StringValue(componentSummary.Arn)
-
-					r := ResourceComponent()
-					d := r.Data(nil)
-					d.SetId(arn)
-
-					sweepResources = append(sweepResources, sweep.NewSweepResource(r, d, client))
-				}
-
-				return !lastPage
-			})
-
-			if err != nil {
-				sweeperErr := fmt.Errorf("error listing Image Builder Component (%s) versions: %w", arn, err)
-				log.Printf("[ERROR] %s", sweeperErr)
-				sweeperErrs = multierror.Append(sweeperErrs, sweeperErr)
-				continue
-			}
+		if err != nil {
+			return fmt.Errorf("error listing ImageBuilder Components (%s): %w", region, err)
 		}
 
-		return !lastPage
-	})
+		for _, v := range page.ComponentVersionList {
+			r := ResourceComponent()
+			d := r.Data(nil)
+			d.SetId(aws.ToString(v.Arn))
 
-	if awsv1.SkipSweepError(err) {
-		log.Printf("[WARN] Skipping Image Builder Component sweep for %s: %s", region, err)
-		return sweeperErrs.ErrorOrNil() // In case we have completed some pages, but had errors
+			sweepResources = append(sweepResources, sweep.NewSweepResource(r, d, client))
+		}
 	}
+
+	err = sweep.SweepOrchestrator(ctx, sweepResources)
+
 	if err != nil {
-		sweeperErrs = multierror.Append(sweeperErrs, fmt.Errorf("error listing Image Builder Components: %w", err))
+		return fmt.Errorf("error sweeping ImageBuilder Components (%s): %w", region, err)
 	}
 
-	if err := sweep.SweepOrchestrator(ctx, sweepResources); err != nil {
-		sweeperErrs = multierror.Append(sweeperErrs, fmt.Errorf("error sweeping Image Builder Components: %w", err))
-	}
-
-	return sweeperErrs.ErrorOrNil()
+	return nil
 }
 
 func sweepDistributionConfigurations(region string) error {
@@ -135,47 +109,40 @@ func sweepDistributionConfigurations(region string) error {
 	if err != nil {
 		return fmt.Errorf("error getting client: %s", err)
 	}
-	conn := client.ImageBuilderConn(ctx)
-
-	sweepResources := make([]sweep.Sweepable, 0)
-	var sweeperErrs *multierror.Error
+	conn := client.ImageBuilderClient(ctx)
 
 	input := &imagebuilder.ListDistributionConfigurationsInput{}
-	err = conn.ListDistributionConfigurationsPagesWithContext(ctx, input, func(page *imagebuilder.ListDistributionConfigurationsOutput, lastPage bool) bool {
-		if page == nil {
-			return !lastPage
+	sweepResources := make([]sweep.Sweepable, 0)
+
+	pages := imagebuilder.NewListDistributionConfigurationsPaginator(conn, input)
+	for pages.HasMorePages() {
+		page, err := pages.NextPage(ctx)
+
+		if awsv2.SkipSweepError(err) {
+			log.Printf("[WARN] Skipping ImageBuilder Distribution Configuration Summary sweep for %s: %s", region, err)
+			return nil
 		}
 
-		for _, distributionConfigurationSummary := range page.DistributionConfigurationSummaryList {
-			if distributionConfigurationSummary == nil {
-				continue
-			}
+		if err != nil {
+			return fmt.Errorf("error listing ImageBuilder Distribution Configuration Summary (%s): %w", region, err)
+		}
 
-			arn := aws.StringValue(distributionConfigurationSummary.Arn)
-
+		for _, v := range page.DistributionConfigurationSummaryList {
 			r := ResourceDistributionConfiguration()
 			d := r.Data(nil)
-			d.SetId(arn)
+			d.SetId(aws.ToString(v.Arn))
 
 			sweepResources = append(sweepResources, sweep.NewSweepResource(r, d, client))
 		}
-
-		return !lastPage
-	})
-
-	if awsv1.SkipSweepError(err) {
-		log.Printf("[WARN] Skipping Image Builder Distribution Configuration sweep for %s: %s", region, err)
-		return sweeperErrs.ErrorOrNil() // In case we have completed some pages, but had errors
 	}
+
+	err = sweep.SweepOrchestrator(ctx, sweepResources)
+
 	if err != nil {
-		sweeperErrs = multierror.Append(sweeperErrs, fmt.Errorf("error listing Image Builder Distribution Configurations: %w", err))
+		return fmt.Errorf("error sweeping ImageBuilder Distribution Configuration Summary (%s): %w", region, err)
 	}
 
-	if err := sweep.SweepOrchestrator(ctx, sweepResources); err != nil {
-		sweeperErrs = multierror.Append(sweeperErrs, fmt.Errorf("error sweeping Image Builder Distribution Configurations: %w", err))
-	}
-
-	return sweeperErrs.ErrorOrNil()
+	return nil
 }
 
 func sweepImagePipelines(region string) error {
@@ -184,47 +151,40 @@ func sweepImagePipelines(region string) error {
 	if err != nil {
 		return fmt.Errorf("error getting client: %w", err)
 	}
-	conn := client.ImageBuilderConn(ctx)
-
-	sweepResources := make([]sweep.Sweepable, 0)
-	var sweeperErrs *multierror.Error
+	conn := client.ImageBuilderClient(ctx)
 
 	input := &imagebuilder.ListImagePipelinesInput{}
-	err = conn.ListImagePipelinesPagesWithContext(ctx, input, func(page *imagebuilder.ListImagePipelinesOutput, lastPage bool) bool {
-		if page == nil {
-			return !lastPage
+	sweepResources := make([]sweep.Sweepable, 0)
+
+	pages := imagebuilder.NewListImagePipelinesPaginator(conn, input)
+	for pages.HasMorePages() {
+		page, err := pages.NextPage(ctx)
+
+		if awsv2.SkipSweepError(err) {
+			log.Printf("[WARN] Skipping ImageBuilder Image Pipelines sweep for %s: %s", region, err)
+			return nil
 		}
 
-		for _, imagePipeline := range page.ImagePipelineList {
-			if imagePipeline == nil {
-				continue
-			}
+		if err != nil {
+			return fmt.Errorf("error listing ImageBuilder Image Pipelines (%s): %w", region, err)
+		}
 
-			arn := aws.StringValue(imagePipeline.Arn)
-
+		for _, v := range page.ImagePipelineList {
 			r := ResourceImagePipeline()
 			d := r.Data(nil)
-			d.SetId(arn)
+			d.SetId(aws.ToString(v.Arn))
 
 			sweepResources = append(sweepResources, sweep.NewSweepResource(r, d, client))
 		}
-
-		return !lastPage
-	})
-
-	if awsv1.SkipSweepError(err) {
-		log.Printf("[WARN] Skipping Image Builder Image Pipeline sweep for %s: %s", region, err)
-		return sweeperErrs.ErrorOrNil() // In case we have completed some pages, but had errors
 	}
+
+	err = sweep.SweepOrchestrator(ctx, sweepResources)
+
 	if err != nil {
-		sweeperErrs = multierror.Append(sweeperErrs, fmt.Errorf("error listing Image Builder Image Pipelines: %w", err))
+		return fmt.Errorf("error sweeping ImageBuilder Image Pipelines (%s): %w", region, err)
 	}
 
-	if err := sweep.SweepOrchestrator(ctx, sweepResources); err != nil {
-		sweeperErrs = multierror.Append(sweeperErrs, fmt.Errorf("error sweeping Image Builder Image Pipelines: %w", err))
-	}
-
-	return sweeperErrs.ErrorOrNil()
+	return nil
 }
 
 func sweepImageRecipes(region string) error {
@@ -233,49 +193,40 @@ func sweepImageRecipes(region string) error {
 	if err != nil {
 		return fmt.Errorf("error getting client: %w", err)
 	}
-	conn := client.ImageBuilderConn(ctx)
+	conn := client.ImageBuilderClient(ctx)
 
+	input := &imagebuilder.ListImageRecipesInput{}
 	sweepResources := make([]sweep.Sweepable, 0)
-	var sweeperErrs *multierror.Error
 
-	input := &imagebuilder.ListImageRecipesInput{
-		Owner: aws.String(imagebuilder.OwnershipSelf),
-	}
-	err = conn.ListImageRecipesPagesWithContext(ctx, input, func(page *imagebuilder.ListImageRecipesOutput, lastPage bool) bool {
-		if page == nil {
-			return !lastPage
+	pages := imagebuilder.NewListImageRecipesPaginator(conn, input)
+	for pages.HasMorePages() {
+		page, err := pages.NextPage(ctx)
+
+		if awsv2.SkipSweepError(err) {
+			log.Printf("[WARN] Skipping ImageBuilder Image Recipes sweep for %s: %s", region, err)
+			return nil
 		}
 
-		for _, imageRecipeSummary := range page.ImageRecipeSummaryList {
-			if imageRecipeSummary == nil {
-				continue
-			}
+		if err != nil {
+			return fmt.Errorf("error listing ImageBuilder Image Recipes (%s): %w", region, err)
+		}
 
-			arn := aws.StringValue(imageRecipeSummary.Arn)
-
+		for _, v := range page.ImageRecipeSummaryList {
 			r := ResourceImageRecipe()
 			d := r.Data(nil)
-			d.SetId(arn)
+			d.SetId(aws.ToString(v.Arn))
 
 			sweepResources = append(sweepResources, sweep.NewSweepResource(r, d, client))
 		}
-
-		return !lastPage
-	})
-
-	if awsv1.SkipSweepError(err) {
-		log.Printf("[WARN] Skipping Image Builder Image Recipe sweep for %s: %s", region, err)
-		return sweeperErrs.ErrorOrNil() // In case we have completed some pages, but had errors
 	}
+
+	err = sweep.SweepOrchestrator(ctx, sweepResources)
+
 	if err != nil {
-		sweeperErrs = multierror.Append(sweeperErrs, fmt.Errorf("error listing Image Builder Image Recipes: %w", err))
+		return fmt.Errorf("error sweeping ImageBuilder Image Recipes (%s): %w", region, err)
 	}
 
-	if err := sweep.SweepOrchestrator(ctx, sweepResources); err != nil {
-		sweeperErrs = multierror.Append(sweeperErrs, fmt.Errorf("error sweeping Image Builder Image Recipes: %w", err))
-	}
-
-	return sweeperErrs.ErrorOrNil()
+	return nil
 }
 
 func sweepContainerRecipes(region string) error {
@@ -284,49 +235,40 @@ func sweepContainerRecipes(region string) error {
 	if err != nil {
 		return fmt.Errorf("error getting client: %w", err)
 	}
-	conn := client.ImageBuilderConn(ctx)
+	conn := client.ImageBuilderClient(ctx)
 
+	input := &imagebuilder.ListContainerRecipesInput{}
 	sweepResources := make([]sweep.Sweepable, 0)
-	var sweeperErrs *multierror.Error
 
-	input := &imagebuilder.ListContainerRecipesInput{
-		Owner: aws.String(imagebuilder.OwnershipSelf),
-	}
-	err = conn.ListContainerRecipesPagesWithContext(ctx, input, func(page *imagebuilder.ListContainerRecipesOutput, lastPage bool) bool {
-		if page == nil {
-			return !lastPage
+	pages := imagebuilder.NewListContainerRecipesPaginator(conn, input)
+	for pages.HasMorePages() {
+		page, err := pages.NextPage(ctx)
+
+		if awsv2.SkipSweepError(err) {
+			log.Printf("[WARN] Skipping ImageBuilder Container Recipes sweep for %s: %s", region, err)
+			return nil
 		}
 
-		for _, containerRecipeSummary := range page.ContainerRecipeSummaryList {
-			if containerRecipeSummary == nil {
-				continue
-			}
+		if err != nil {
+			return fmt.Errorf("error listing ImageBuilder Container Recipes (%s): %w", region, err)
+		}
 
-			arn := aws.StringValue(containerRecipeSummary.Arn)
-
+		for _, v := range page.ContainerRecipeSummaryList {
 			r := ResourceContainerRecipe()
 			d := r.Data(nil)
-			d.SetId(arn)
+			d.SetId(aws.ToString(v.Arn))
 
 			sweepResources = append(sweepResources, sweep.NewSweepResource(r, d, client))
 		}
-
-		return !lastPage
-	})
-
-	if awsv1.SkipSweepError(err) {
-		log.Printf("[WARN] Skipping Image Builder Container Recipe sweep for %s: %s", region, err)
-		return sweeperErrs.ErrorOrNil() // In case we have completed some pages, but had errors
 	}
+
+	err = sweep.SweepOrchestrator(ctx, sweepResources)
+
 	if err != nil {
-		sweeperErrs = multierror.Append(sweeperErrs, fmt.Errorf("error listing Image Builder Container Recipes: %w", err))
+		return fmt.Errorf("error sweeping ImageBuilder Container Recipes (%s): %w", region, err)
 	}
 
-	if err := sweep.SweepOrchestrator(ctx, sweepResources); err != nil {
-		sweeperErrs = multierror.Append(sweeperErrs, fmt.Errorf("error sweeping Image Builder Container Recipes: %w", err))
-	}
-
-	return sweeperErrs.ErrorOrNil()
+	return nil
 }
 
 func sweepImages(region string) error {
@@ -337,77 +279,40 @@ func sweepImages(region string) error {
 		return fmt.Errorf("error getting client: %w", err)
 	}
 
-	conn := client.ImageBuilderConn(ctx)
-	sweepResources := make([]sweep.Sweepable, 0)
-	var errs *multierror.Error
+	conn := client.ImageBuilderClient(ctx)
 
-	input := &imagebuilder.ListImagesInput{
-		Owner: aws.String(imagebuilder.OwnershipSelf),
+	input := &imagebuilder.ListImagesInput{}
+	sweepResources := make([]sweep.Sweepable, 0)
+
+	pages := imagebuilder.NewListImagesPaginator(conn, input)
+	for pages.HasMorePages() {
+		page, err := pages.NextPage(ctx)
+
+		if awsv2.SkipSweepError(err) {
+			log.Printf("[WARN] Skipping ImageBuilder Images sweep for %s: %s", region, err)
+			return nil
+		}
+
+		if err != nil {
+			return fmt.Errorf("error listing ImageBuilder Images (%s): %w", region, err)
+		}
+
+		for _, v := range page.ImageVersionList {
+			r := ResourceImage()
+			d := r.Data(nil)
+			d.SetId(aws.ToString(v.Arn))
+
+			sweepResources = append(sweepResources, sweep.NewSweepResource(r, d, client))
+		}
 	}
 
-	err = conn.ListImagesPagesWithContext(ctx, input, func(page *imagebuilder.ListImagesOutput, lastPage bool) bool {
-		if page == nil {
-			return !lastPage
-		}
-
-		for _, imageVersion := range page.ImageVersionList {
-			if imageVersion == nil {
-				continue
-			}
-
-			// Retrieve the Image's Build Version ARNs required as input
-			// to the ResourceImage()'s Delete operation
-			// Reference: https://github.com/hashicorp/terraform-provider-aws/issues/19851
-			imageVersionArn := aws.StringValue(imageVersion.Arn)
-
-			input := &imagebuilder.ListImageBuildVersionsInput{
-				ImageVersionArn: imageVersion.Arn,
-			}
-
-			err := conn.ListImageBuildVersionsPagesWithContext(ctx, input, func(page *imagebuilder.ListImageBuildVersionsOutput, lastPage bool) bool {
-				if page == nil {
-					return !lastPage
-				}
-
-				for _, imageSummary := range page.ImageSummaryList {
-					if imageSummary == nil {
-						continue
-					}
-
-					imageBuildVersionArn := aws.StringValue(imageSummary.Arn)
-
-					r := ResourceImage()
-					d := r.Data(nil)
-					d.SetId(imageBuildVersionArn)
-
-					sweepResources = append(sweepResources, sweep.NewSweepResource(r, d, client))
-				}
-
-				return !lastPage
-			})
-
-			if err != nil {
-				errs = multierror.Append(errs, fmt.Errorf("error listing Image Builder Image Build Versions for image (%s): %w", imageVersionArn, err))
-			}
-		}
-
-		return !lastPage
-	})
+	err = sweep.SweepOrchestrator(ctx, sweepResources)
 
 	if err != nil {
-		errs = multierror.Append(errs, fmt.Errorf("error listing Image Builder Images for %s: %w", region, err))
+		return fmt.Errorf("error sweeping ImageBuilder Images (%s): %w", region, err)
 	}
 
-	if err := sweep.SweepOrchestrator(ctx, sweepResources); err != nil {
-		errs = multierror.Append(errs, fmt.Errorf("error sweeping Image Builder Images for %s: %w", region, err))
-	}
-
-	if awsv1.SkipSweepError(err) {
-		log.Printf("[WARN] Skipping Image Builder Image sweep for %s: %s", region, err)
-		return nil
-	}
-
-	return errs.ErrorOrNil()
+	return nil
 }
 
 func sweepInfrastructureConfigurations(region string) error {
@@ -416,46 +321,76 @@ func sweepInfrastructureConfigurations(region string) error {
 	if err != nil {
 		return fmt.Errorf("error getting client: %s", err)
 	}
-	conn := client.ImageBuilderConn(ctx)
-
-	sweepResources := make([]sweep.Sweepable, 0)
-	var sweeperErrs *multierror.Error
+	conn := client.ImageBuilderClient(ctx)
 
 	input := &imagebuilder.ListInfrastructureConfigurationsInput{}
+	sweepResources := make([]sweep.Sweepable, 0)
 
-	err = conn.ListInfrastructureConfigurationsPagesWithContext(ctx, input, func(page *imagebuilder.ListInfrastructureConfigurationsOutput, lastPage bool) bool {
-		if page == nil {
-			return !lastPage
+	pages := imagebuilder.NewListInfrastructureConfigurationsPaginator(conn, input)
+	for pages.HasMorePages() {
+		page, err := pages.NextPage(ctx)
+
+		if awsv2.SkipSweepError(err) {
+			log.Printf("[WARN] Skipping ImageBuilder Infrastructure Configurations sweep for %s: %s", region, err)
+			return nil
 		}
 
-		for _, infrastructureConfigurationSummary := range page.InfrastructureConfigurationSummaryList {
-			if infrastructureConfigurationSummary == nil {
-				continue
-			}
+		if err != nil {
+			return fmt.Errorf("error listing ImageBuilder Infrastructure Configurations (%s): %w", region, err)
+		}
 
-			arn := aws.StringValue(infrastructureConfigurationSummary.Arn)
-
+		for _, v := range page.InfrastructureConfigurationSummaryList {
 			r := ResourceInfrastructureConfiguration()
 			d := r.Data(nil)
-			d.SetId(arn)
+			d.SetId(aws.ToString(v.Arn))
 
 			sweepResources = append(sweepResources, sweep.NewSweepResource(r, d, client))
 		}
-
-		return !lastPage
-	})
-
-	if awsv1.SkipSweepError(err) {
-		log.Printf("[WARN] Skipping Image Builder Infrastructure Configuration sweep for %s: %s", region, err)
-		return sweeperErrs.ErrorOrNil() // In case we have completed some pages, but had errors
 	}
+
+	err = sweep.SweepOrchestrator(ctx, sweepResources)
+
 	if err != nil {
-		sweeperErrs = multierror.Append(sweeperErrs, fmt.Errorf("error listing Image Builder Infrastructure Configurations: %w", err))
+		return fmt.Errorf("error sweeping ImageBuilder Infrastructure Configurations (%s): %w", region, err)
 	}
 
-	if err := sweep.SweepOrchestrator(ctx, sweepResources); err != nil {
-		sweeperErrs = multierror.Append(sweeperErrs, fmt.Errorf("error sweeping Image Builder Infrastructure Configurations: %w", err))
+	return nil
+}
+
+func sweepLifecyclePolicies(region string) error {
+	ctx := sweep.Context(region)
+	client, err := sweep.SharedRegionalSweepClient(ctx, region)
+	if err != nil {
+		return fmt.Errorf("error getting client: %s", err)
+	}
+	conn := client.ImageBuilderClient(ctx)
+
+	input := &imagebuilder.ListLifecyclePoliciesInput{}
+	sweepResources := make([]sweep.Sweepable, 0)
+
+	pages := imagebuilder.NewListLifecyclePoliciesPaginator(conn, input)
+	for pages.HasMorePages() {
+		page, err := pages.NextPage(ctx)
+
+		if awsv2.SkipSweepError(err) {
+			log.Printf("[WARN] Skipping ImageBuilder Lifecycle Policies sweep for %s: %s", region, err)
+			return nil
+		}
+
+		if err != nil {
+			return fmt.Errorf("error listing ImageBuilder Lifecycle Policies (%s): %w", region, err)
+		}
+
+		for _, v := range page.LifecyclePolicySummaryList {
+			sweepResources = append(sweepResources, framework.NewSweepResource(newResourceLifecyclePolicy, client, framework.NewAttribute("arn", v.Arn)))
+		}
 	}
 
-	return sweeperErrs.ErrorOrNil()
+	err = sweep.SweepOrchestrator(ctx, sweepResources)
+
+	if err != nil {
+		return fmt.Errorf("error sweeping ImageBuilder Lifecycle Policies (%s): %w", region, err)
+	}
+
+	return nil
 }
