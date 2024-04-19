@@ -1,5 +1,6 @@
 package backup
 
 var (
-	RestoreTestingPlanResource = newResourceRestoreTestingPlan
+	RestoreTestingPlanResource      = newResourceRestoreTestingPlan
+	RestoreTestingSelectionResource = newResourceRestoreTestingSelection
 )

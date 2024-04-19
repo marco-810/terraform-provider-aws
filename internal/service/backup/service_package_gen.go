@@ -30,6 +30,10 @@ func (p *servicePackage) FrameworkResources(ctx context.Context) []*types.Servic
 				IdentifierAttribute: "arn",
 			},
 		},
+		{
+			Factory: newResourceRestoreTestingSelection,
+			Name:    "Restore Testing Plan Selection",
+		},
 	}
 }
 
