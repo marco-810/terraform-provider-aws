@@ -41,6 +41,7 @@ const (
 	BedrockEndpointID                    = "bedrock"
 	BCMDataExportsEndpointID             = "bcm-data-exports"
 	BudgetsEndpointID                    = "budgets"
+	ChimeEndpointID                      = "chime"
 	ChimeSDKMediaPipelinesEndpointID     = "media-pipelines-chime"
 	ChimeSDKVoiceEndpointID              = "voice-chime"
 	CloudSearchEndpointID                = "cloudsearch"
