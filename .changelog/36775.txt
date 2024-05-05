@@ -1,0 +1,3 @@
+```release-note:bug
+resource/aws_rds_cluster_activity_stream: Properly handle scenarios where `resource_arn` refers to an RDS DB instance
+```

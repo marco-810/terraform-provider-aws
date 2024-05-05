@@ -38,16 +38,15 @@ func TestAccRDSClusterActivityStream_basic(t *testing.T) {
 			{
 				Config: testAccClusterActivityStreamConfig_basic(rName),
 				Check: resource.ComposeTestCheckFunc(
-					testAccCheckClusterActivityStreamExists(ctx, resourceName, &dbCluster),
+					testAccCheckClusterActivityStreamExistsForDBCluster(ctx, resourceName, &dbCluster),
 					resource.TestCheckResourceAttr(resourceName, "engine_native_audit_fields_included", "false"),
 					resource.TestCheckResourceAttrSet(resourceName, "kinesis_stream_name"),
 				),
 			},
 			{
-				ResourceName:            resourceName,
-				ImportState:             true,
-				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"engine_native_audit_fields_included"},
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateVerify: true,
 			},
 		},
 	})
@@ -71,7 +70,7 @@ func TestAccRDSClusterActivityStream_disappears(t *testing.T) {
 			{
 				Config: testAccClusterActivityStreamConfig_basic(rName),
 				Check: resource.ComposeTestCheckFunc(
-					testAccCheckClusterActivityStreamExists(ctx, resourceName, &dbCluster),
+					testAccCheckClusterActivityStreamExistsForDBCluster(ctx, resourceName, &dbCluster),
 					acctest.CheckResourceDisappears(ctx, acctest.Provider, tfrds.ResourceClusterActivityStream(), resourceName),
 				),
 				ExpectNonEmptyPlan: true,
@@ -80,7 +79,95 @@ func TestAccRDSClusterActivityStream_disappears(t *testing.T) {
 	})
 }
 
-func testAccCheckClusterActivityStreamExists(ctx context.Context, n string, v *rds.DBCluster) resource.TestCheckFunc {
+func TestAccRDSClusterActivityStream_DBInstance(t *testing.T) {
+	ctx := acctest.Context(t)
+	var dbInstance rds.DBInstance
+	rName := sdkacctest.RandomWithPrefix(acctest.ResourcePrefix)
+	resourceName := "aws_rds_cluster_activity_stream.test"
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck: func() {
+			acctest.PreCheck(ctx, t)
+			acctest.PreCheckPartition(t, endpoints.AwsPartitionID)
+		},
+		ErrorCheck:               acctest.ErrorCheck(t, names.RDSServiceID),
+		ProtoV5ProviderFactories: acctest.ProtoV5ProviderFactories,
+		CheckDestroy:             testAccCheckClusterActivityStreamDestroy(ctx),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccClusterActivityStreamConfig_DBInstance(rName, false),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckInstanceActivityStreamExistsForDBInstance(ctx, resourceName, &dbInstance),
+					resource.TestCheckResourceAttr(resourceName, "engine_native_audit_fields_included", "false"),
+					resource.TestCheckResourceAttrSet(resourceName, "kinesis_stream_name"),
+				),
+			},
+			{
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+			{
+				Config: testAccClusterActivityStreamConfig_DBInstance(rName, true),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckInstanceActivityStreamExistsForDBInstance(ctx, resourceName, &dbInstance),
+					resource.TestCheckResourceAttr(resourceName, "engine_native_audit_fields_included", "true"),
+					resource.TestCheckResourceAttrSet(resourceName, "kinesis_stream_name"),
+				),
+			},
+			{
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+func testAccCheckClusterActivityStreamDestroy(ctx context.Context) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		conn := acctest.Provider.Meta().(*conns.AWSClient).RDSConn(ctx)
+
+		for _, rs := range s.RootModule().Resources {
+			if rs.Type != "aws_rds_cluster_activity_stream" {
+				continue
+			}
+
+			dbClusterARN, err := tfrds.IsDBClusterARN(rs.Primary.ID)
+			if err != nil {
+				return err
+			}
+
+			if dbClusterARN {
+				_, err := tfrds.FindDBClusterWithActivityStream(ctx, conn, rs.Primary.ID)
+
+				if tfresource.NotFound(err) {
+					continue
+				}
+
+				if err != nil {
+					return err
+				}
+			} else {
+				_, err := tfrds.FindDBInstanceWithActivityStream(ctx, conn, rs.Primary.ID)
+
+				if tfresource.NotFound(err) {
+					continue
+				}
+
+				if err != nil {
+					return err
+				}
+			}
+
+			return fmt.Errorf("RDS Database Activity Stream %s still exists", rs.Primary.ID)
+		}
+
+		return nil
+	}
+}
+
+func testAccCheckClusterActivityStreamExistsForDBCluster(ctx context.Context, n string, v *rds.DBCluster) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		rs, ok := s.RootModule().Resources[n]
 		if !ok {
@@ -88,7 +175,7 @@ func testAccCheckClusterActivityStreamExists(ctx context.Context, n string, v *r
 		}
 
 		if rs.Primary.ID == "" {
-			return fmt.Errorf("RDS Cluster Activity Stream ID is not set")
+			return fmt.Errorf("RDS Database Activity Stream ID is not set")
 		}
 
 		conn := acctest.Provider.Meta().(*conns.AWSClient).RDSConn(ctx)
@@ -104,27 +191,25 @@ func testAccCheckClusterActivityStreamExists(ctx context.Context, n string, v *r
 	}
 }
 
-func testAccCheckClusterActivityStreamDestroy(ctx context.Context) resource.TestCheckFunc {
+func testAccCheckInstanceActivityStreamExistsForDBInstance(ctx context.Context, n string, v *rds.DBInstance) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
+		rs, ok := s.RootModule().Resources[n]
+		if !ok {
+			return fmt.Errorf("Not found: %s", n)
+		}
+
+		if rs.Primary.ID == "" {
+			return fmt.Errorf("RDS Database Activity Stream ID is not set")
+		}
+
 		conn := acctest.Provider.Meta().(*conns.AWSClient).RDSConn(ctx)
 
-		for _, rs := range s.RootModule().Resources {
-			if rs.Type != "aws_rds_cluster_activity_stream" {
-				continue
-			}
-
-			_, err := tfrds.FindDBClusterWithActivityStream(ctx, conn, rs.Primary.ID)
-
-			if tfresource.NotFound(err) {
-				continue
-			}
-
-			if err != nil {
-				return err
-			}
-
-			return fmt.Errorf("RDS Cluster Activity Stream %s still exists", rs.Primary.ID)
+		output, err := tfrds.FindDBInstanceWithActivityStream(ctx, conn, rs.Primary.ID)
+		if err != nil {
+			return err
 		}
+
+		*v = *output
 
 		return nil
 	}
@@ -167,4 +252,52 @@ resource "aws_rds_cluster_activity_stream" "test" {
   depends_on = [aws_rds_cluster_instance.test]
 }
 `)
+}
+
+func testAccClusterActivityStreamConfig_baseVPC(rName string) string {
+	return acctest.ConfigCompose(acctest.ConfigVPCWithSubnets(rName, 2), fmt.Sprintf(`
+resource "aws_db_subnet_group" "test" {
+  name = %[1]q
+
+  subnet_ids = aws_subnet.test[*].id
+}
+`, rName))
+}
+
+func testAccClusterActivityStreamConfig_DBInstanceMSQQLBase(rName string) string {
+	return acctest.ConfigCompose(
+		testAccClusterActivityStreamConfig_baseVPC(rName),
+		fmt.Sprintf(`
+resource "aws_kms_key" "test" {
+  description             = %[1]q
+  deletion_window_in_days = 7
+}
+
+resource "aws_db_instance" "test" {
+  allocated_storage       = 20
+  backup_retention_period = 0
+  db_subnet_group_name    = aws_db_subnet_group.test.name
+  engine                  = "sqlserver-se"
+  engine_version          = "15.00"
+  identifier              = %[1]q
+  instance_class          = "db.m6i.large"
+  license_model           = "license-included"
+  password                = "avoid-plaintext-passwords"
+  skip_final_snapshot     = true
+  storage_encrypted       = true
+  username                = "tfacctest"
+}
+`, rName))
+}
+
+func testAccClusterActivityStreamConfig_DBInstance(rName string, engineNativeAuditFieldsIncluded bool) string {
+	return acctest.ConfigCompose(testAccClusterActivityStreamConfig_DBInstanceMSQQLBase(rName),
+		fmt.Sprintf(`
+resource "aws_rds_cluster_activity_stream" "test" {
+  resource_arn                        = aws_db_instance.test.arn
+  kms_key_id                          = aws_kms_key.test.key_id
+  mode                                = "async"
+  engine_native_audit_fields_included = %[1]t
+}
+`, engineNativeAuditFieldsIncluded))
 }
