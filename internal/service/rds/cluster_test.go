@@ -481,6 +481,30 @@ func TestAccRDSCluster_availabilityZones(t *testing.T) {
 	})
 }
 
+func TestAccRDSCluster_availabilityZones_caCertificateIdentifier(t *testing.T) {
+	ctx := acctest.Context(t)
+	var dbCluster rds.DBCluster
+	rName := sdkacctest.RandomWithPrefix(acctest.ResourcePrefix)
+	resourceName := "aws_rds_cluster.test"
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(ctx, t) },
+		ErrorCheck:               acctest.ErrorCheck(t, names.RDSServiceID),
+		ProtoV5ProviderFactories: acctest.ProtoV5ProviderFactories,
+		CheckDestroy:             testAccCheckClusterDestroy(ctx),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccClusterConfig_availabilityZones_caCertificateIdentifier(rName),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckClusterExists(ctx, resourceName, &dbCluster),
+					resource.TestCheckResourceAttrSet(resourceName, "ca_certificate_identifier"),
+					resource.TestCheckResourceAttrSet(resourceName, "ca_certificate_valid_till"),
+				),
+			},
+		},
+	})
+}
+
 func TestAccRDSCluster_storageTypeIo1(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping long-running test in short mode")
@@ -3106,6 +3130,34 @@ resource "aws_rds_cluster" "test" {
   skip_final_snapshot = true
 }
 `, rName, tfrds.ClusterEngineAuroraMySQL))
+}
+
+func testAccClusterConfig_availabilityZones_caCertificateIdentifier(rName string) string {
+	return acctest.ConfigCompose(testAccConfig_ClusterSubnetGroup(rName), fmt.Sprintf(`
+data "aws_rds_orderable_db_instance" "test" {
+  engine                     = %[2]q
+  engine_latest_version      = true
+  preferred_instance_classes = [%[3]s]
+  supports_clusters          = true
+  supports_iops              = true
+}
+
+resource "aws_rds_cluster" "test" {
+  apply_immediately         = true
+  db_subnet_group_name      = aws_db_subnet_group.test.name
+  ca_certificate_identifier = "rds-ca-2019"
+  cluster_identifier        = %[1]q
+  engine                    = data.aws_rds_orderable_db_instance.test.engine
+  engine_version            = data.aws_rds_orderable_db_instance.test.engine_version
+  storage_type              = data.aws_rds_orderable_db_instance.test.storage_type
+  allocated_storage         = 100
+  iops                      = 1000
+  db_cluster_instance_class = "db.r6gd.xlarge"
+  master_password           = "avoid-plaintext-passwords"
+  master_username           = "tfacctest"
+  skip_final_snapshot       = true
+}
+`, rName, tfrds.ClusterEngineMySQL, mainInstanceClasses))
 }
 
 func testAccClusterConfig_storageType(rName string, sType string) string {
