@@ -58,6 +58,18 @@ func dataSourceCluster() *schema.Resource {
 				Type:     schema.TypeString,
 				Computed: true,
 			},
+			"bootstrap_brokers_vpc_connectivity_sasl_iam": {
+				Type:     schema.TypeString,
+				Computed: true,
+			},
+			"bootstrap_brokers_vpc_connectivity_sasl_scram": {
+				Type:     schema.TypeString,
+				Computed: true,
+			},
+			"bootstrap_brokers_vpc_connectivity_tls": {
+				Type:     schema.TypeString,
+				Computed: true,
+			},
 			names.AttrClusterName: {
 				Type:         schema.TypeString,
 				Required:     true,
@@ -121,6 +133,9 @@ func dataSourceClusterRead(ctx context.Context, d *schema.ResourceData, meta int
 	d.Set("bootstrap_brokers_sasl_iam", SortEndpointsString(aws.ToString(bootstrapBrokersOutput.BootstrapBrokerStringSaslIam)))
 	d.Set("bootstrap_brokers_sasl_scram", SortEndpointsString(aws.ToString(bootstrapBrokersOutput.BootstrapBrokerStringSaslScram)))
 	d.Set("bootstrap_brokers_tls", SortEndpointsString(aws.ToString(bootstrapBrokersOutput.BootstrapBrokerStringTls)))
+	d.Set("bootstrap_brokers_vpc_connectivity_sasl_iam", SortEndpointsString(aws.ToString(bootstrapBrokersOutput.BootstrapBrokerStringVpcConnectivitySaslIam)))
+	d.Set("bootstrap_brokers_vpc_connectivity_sasl_scram", SortEndpointsString(aws.ToString(bootstrapBrokersOutput.BootstrapBrokerStringVpcConnectivitySaslScram)))
+	d.Set("bootstrap_brokers_vpc_connectivity_tls", SortEndpointsString(aws.ToString(bootstrapBrokersOutput.BootstrapBrokerStringVpcConnectivityTls)))
 	d.Set(names.AttrClusterName, cluster.ClusterName)
 	clusterUUID, _ := clusterUUIDFromARN(clusterARN)
 	d.Set("cluster_uuid", clusterUUID)
