@@ -1328,11 +1328,10 @@ func resourceInstanceRead(ctx context.Context, d *schema.ResourceData, meta inte
 			return sdkdiag.AppendErrorf(diags, "reading EC2 Instance (%s): %s", d.Id(), err)
 		}
 
-		defaultTagsConfig := meta.(*conns.AWSClient).DefaultTagsConfig
 		ignoreTagsConfig := meta.(*conns.AWSClient).IgnoreTagsConfig
 		tags := KeyValueTags(ctx, volumeTags).IgnoreAWS().IgnoreConfig(ignoreTagsConfig)
 
-		if err := d.Set("volume_tags", tags.RemoveDefaultConfig(defaultTagsConfig).Map()); err != nil {
+		if err := d.Set("volume_tags", tags.Map()); err != nil {
 			return sdkdiag.AppendErrorf(diags, "setting volume_tags: %s", err)
 		}
 	}
@@ -2322,7 +2321,6 @@ func readBlockDevicesFromInstance(ctx context.Context, d *schema.ResourceData, m
 		return nil, err
 	}
 
-	defaultTagsConfig := meta.(*conns.AWSClient).DefaultTagsConfig
 	ignoreTagsConfig := meta.(*conns.AWSClient).IgnoreTagsConfig
 
 	for _, vol := range volResp.Volumes {
@@ -2360,7 +2358,7 @@ func readBlockDevicesFromInstance(ctx context.Context, d *schema.ResourceData, m
 				bd[names.AttrTags] = KeyValueTags(ctx, vol.Tags).IgnoreAWS().IgnoreConfig(ignoreTagsConfig).Map()
 			} else {
 				tags := KeyValueTags(ctx, vol.Tags).IgnoreAWS().IgnoreConfig(ignoreTagsConfig)
-				bd[names.AttrTags] = tags.RemoveDefaultConfig(defaultTagsConfig).Map()
+				bd[names.AttrTags] = tags.Map()
 				bd[names.AttrTagsAll] = tags.Map()
 			}
 		}
