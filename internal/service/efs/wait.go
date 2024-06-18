@@ -7,8 +7,10 @@ import (
 	"context"
 	"time"
 
-	"github.com/aws/aws-sdk-go/service/efs"
+	"github.com/aws/aws-sdk-go-v2/service/efs"
+	awstypes "github.com/aws/aws-sdk-go-v2/service/efs/types"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
+	"github.com/hashicorp/terraform-provider-aws/internal/enum"
 )
 
 const (
@@ -21,17 +23,17 @@ const (
 )
 
 // waitAccessPointCreated waits for an Operation to return Success
-func waitAccessPointCreated(ctx context.Context, conn *efs.EFS, accessPointId string) (*efs.AccessPointDescription, error) {
+func waitAccessPointCreated(ctx context.Context, conn *efs.Client, accessPointId string) (*awstypes.AccessPointDescription, error) {
 	stateConf := &retry.StateChangeConf{
-		Pending: []string{efs.LifeCycleStateCreating},
-		Target:  []string{efs.LifeCycleStateAvailable},
+		Pending: enum.Slice(awstypes.LifeCycleStateCreating),
+		Target:  enum.Slice(awstypes.LifeCycleStateAvailable),
 		Refresh: statusAccessPointLifeCycleState(ctx, conn, accessPointId),
 		Timeout: accessPointCreatedTimeout,
 	}
 
 	outputRaw, err := stateConf.WaitForStateContext(ctx)
 
-	if output, ok := outputRaw.(*efs.AccessPointDescription); ok {
+	if output, ok := outputRaw.(*awstypes.AccessPointDescription); ok {
 		return output, err
 	}
 
@@ -39,9 +41,9 @@ func waitAccessPointCreated(ctx context.Context, conn *efs.EFS, accessPointId st
 }
 
 // waitAccessPointDeleted waits for an Access Point to return Deleted
-func waitAccessPointDeleted(ctx context.Context, conn *efs.EFS, accessPointId string) (*efs.AccessPointDescription, error) {
+func waitAccessPointDeleted(ctx context.Context, conn *efs.Client, accessPointId string) (*awstypes.AccessPointDescription, error) {
 	stateConf := &retry.StateChangeConf{
-		Pending: []string{efs.LifeCycleStateAvailable, efs.LifeCycleStateDeleting, efs.LifeCycleStateDeleted},
+		Pending: enum.Slice(awstypes.LifeCycleStateAvailable, awstypes.LifeCycleStateDeleting, awstypes.LifeCycleStateDeleted),
 		Target:  []string{},
 		Refresh: statusAccessPointLifeCycleState(ctx, conn, accessPointId),
 		Timeout: accessPointDeletedTimeout,
@@ -49,41 +51,41 @@ func waitAccessPointDeleted(ctx context.Context, conn *efs.EFS, accessPointId st
 
 	outputRaw, err := stateConf.WaitForStateContext(ctx)
 
-	if output, ok := outputRaw.(*efs.AccessPointDescription); ok {
+	if output, ok := outputRaw.(*awstypes.AccessPointDescription); ok {
 		return output, err
 	}
 
 	return nil, err
 }
 
-func waitBackupPolicyDisabled(ctx context.Context, conn *efs.EFS, id string) (*efs.BackupPolicy, error) {
+func waitBackupPolicyDisabled(ctx context.Context, conn *efs.Client, id string) (*awstypes.BackupPolicy, error) {
 	stateConf := &retry.StateChangeConf{
-		Pending: []string{efs.StatusDisabling},
-		Target:  []string{efs.StatusDisabled},
+		Pending: enum.Slice(awstypes.StatusDisabling),
+		Target:  enum.Slice(awstypes.StatusDisabled),
 		Refresh: statusBackupPolicy(ctx, conn, id),
 		Timeout: backupPolicyDisabledTimeout,
 	}
 
 	outputRaw, err := stateConf.WaitForStateContext(ctx)
 
-	if output, ok := outputRaw.(*efs.BackupPolicy); ok {
+	if output, ok := outputRaw.(*awstypes.BackupPolicy); ok {
 		return output, err
 	}
 
 	return nil, err
 }
 
-func waitBackupPolicyEnabled(ctx context.Context, conn *efs.EFS, id string) (*efs.BackupPolicy, error) {
+func waitBackupPolicyEnabled(ctx context.Context, conn *efs.Client, id string) (*awstypes.BackupPolicy, error) {
 	stateConf := &retry.StateChangeConf{
-		Pending: []string{efs.StatusEnabling},
-		Target:  []string{efs.StatusEnabled},
+		Pending: enum.Slice(awstypes.StatusEnabling),
+		Target:  enum.Slice(awstypes.StatusEnabled),
 		Refresh: statusBackupPolicy(ctx, conn, id),
 		Timeout: backupPolicyEnabledTimeout,
 	}
 
 	outputRaw, err := stateConf.WaitForStateContext(ctx)
 
-	if output, ok := outputRaw.(*efs.BackupPolicy); ok {
+	if output, ok := outputRaw.(*awstypes.BackupPolicy); ok {
 		return output, err
 	}
 
