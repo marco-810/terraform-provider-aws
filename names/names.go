@@ -66,6 +66,7 @@ const (
 	ECREndpointID                        = "api.ecr"
 	EKSEndpointID                        = "eks"
 	EMREndpointID                        = "elasticmapreduce"
+	ElasticTranscoderEndpointID          = "elastictranscoder"
 	EventsEndpointID                     = "events"
 	EvidentlyEndpointID                  = "evidently"
 	FMSEndpointID                        = "fms"
