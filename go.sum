@@ -440,8 +440,8 @@ github.com/aws/aws-sdk-go-v2/service/workspacesweb v1.21.1 h1:XcW/rY2et34gZB3oGn
 github.com/aws/aws-sdk-go-v2/service/workspacesweb v1.21.1/go.mod h1:L/DSEMyw+H/K0MGmGx+bd/+6ZjOsE+WYW4V4RHegI0U=
 github.com/aws/aws-sdk-go-v2/service/xray v1.27.1 h1:asXBSkcpo1VnbeARCHlhWdsdRBbB1P2LwQ/vQUgoRhI=
 github.com/aws/aws-sdk-go-v2/service/xray v1.27.1/go.mod h1:f2e+aUi1LPkJH7sQOIExCm2AqZZn7ZJOXBABebRjtao=
-github.com/aws/smithy-go v1.20.3 h1:ryHwveWzPV5BIof6fyDvor6V3iUL7nTfiTKXHiW05nE=
-github.com/aws/smithy-go v1.20.3/go.mod h1:krry+ya/rV9RDcV/Q16kpu6ypI4K2czasz0NC3qS14E=
+github.com/aws/smithy-go v1.20.4 h1:2HK1zBdPgRbjFOHlfeQZfpC4r72MOb9bZkiFwggKO+4=
+github.com/aws/smithy-go v1.20.4/go.mod h1:irrKGvNn1InZwb2d7fkIRNucdfwR8R+Ts3wxYa/cJHg=
 github.com/beevik/etree v1.4.0 h1:oz1UedHRepuY3p4N5OjE0nK1WLCqtzHf25bxplKOHLs=
 github.com/beevik/etree v1.4.0/go.mod h1:cyWiXwGoasx60gHvtnEh5x8+uIjUVnjWqBvEnhnqKDA=
 github.com/bgentry/speakeasy v0.1.0 h1:ByYyxL9InA1OWqxJqqp2A5pYHUrCiAL6K3J+LKSsQkY=
